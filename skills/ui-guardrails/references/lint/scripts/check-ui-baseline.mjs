@@ -6,7 +6,9 @@
 //   node scripts/check-ui-baseline.mjs --prune   lower the list to today's findings
 //   node scripts/check-ui-baseline.mjs --seed    list today's findings for rules the base branch has not seeded
 //
-// The base branch is UI_BASELINE_BASE, default origin/main. CI must fetch it.
+// The rules run from their own config file, so the repo's ordinary lint run
+// never sees the grandfathered findings. The base branch is UI_BASELINE_BASE,
+// default origin/main. CI must fetch it.
 
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -17,11 +19,13 @@ import { RULE_IDS } from "../eslint-rules/eslint-plugin-ui-guardrails.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BASELINE_FILE = "scripts/ui-baseline.json";
+const CONFIG_FILE = "eslint.ui.config.mjs";
 const LINT_TARGETS = ["src"];
 const PRUNE = "node scripts/check-ui-baseline.mjs --prune";
 
 const EMPTY = { version: 1, rules: [], counts: {} };
 
+// knownRules is null for the base branch's baseline, which may list a rule this branch removes.
 export function parseBaseline(text, knownRules = RULE_IDS) {
   const parsed = JSON.parse(text);
   if (parsed?.version !== 1 || !Array.isArray(parsed.rules) || typeof parsed.counts !== "object" || parsed.counts === null) {
@@ -29,7 +33,7 @@ export function parseBaseline(text, knownRules = RULE_IDS) {
   }
   const rules = new Set(parsed.rules);
   for (const rule of rules) {
-    if (!knownRules.includes(rule)) throw new Error(`UI baseline lists ${rule}, which the plugin does not define. Remove it.`);
+    if (knownRules && !knownRules.includes(rule)) throw new Error(`UI baseline lists ${rule}, which the plugin does not define. Remove it.`);
   }
   for (const [file, perRule] of Object.entries(parsed.counts)) {
     for (const [rule, count] of Object.entries(perRule)) {
@@ -124,13 +128,32 @@ function readBase(ref) {
   if (git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).status !== 0) {
     throw new Error(`Cannot read the base branch ${ref}. Fetch it first (in CI: fetch-depth 0, or git fetch origin main).`);
   }
-  const shown = git(["show", `${ref}:${BASELINE_FILE}`]);
-  return shown.status === 0 ? parseBaseline(shown.stdout) : EMPTY;
+  // "./" resolves against ROOT, so this also works in a package inside a monorepo.
+  const shown = git(["show", `${ref}:./${BASELINE_FILE}`]);
+  if (shown.status === 0) return parseBaseline(shown.stdout, null);
+  if (/does not exist|exists on disk, but not in/u.test(shown.stderr)) return EMPTY;
+  throw new Error(`Cannot read ${BASELINE_FILE} on ${ref}: ${shown.stderr.trim()}`);
 }
 
+const severityOf = (setting) => (Array.isArray(setting) ? setting[0] : setting);
+const isOn = (setting) => ![undefined, 0, "off"].includes(severityOf(setting));
+
+// A file that does not parse, or that the rules do not run on, would count as
+// zero findings and look fixed. Both stop the check instead.
 async function lint() {
-  const eslint = new ESLint({ cwd: ROOT, ruleFilter: ({ ruleId }) => RULE_IDS.includes(ruleId) });
-  return eslint.lintFiles(LINT_TARGETS);
+  const eslint = new ESLint({ cwd: ROOT, overrideConfigFile: CONFIG_FILE, ruleFilter: ({ ruleId }) => RULE_IDS.includes(ruleId) });
+  const results = await eslint.lintFiles(LINT_TARGETS);
+  const problems = [];
+  if (results.length === 0) problems.push(`${CONFIG_FILE} lints no files under ${LINT_TARGETS.join(", ")}.`);
+  for (const result of results) {
+    const file = path.relative(ROOT, result.filePath).split(path.sep).join("/");
+    for (const message of result.messages.filter((entry) => entry.fatal)) problems.push(`${file}:${message.line} does not parse: ${message.message}`);
+    const config = await eslint.calculateConfigForFile(result.filePath);
+    for (const rule of RULE_IDS) {
+      if (!isOn(config?.rules?.[rule])) problems.push(`${file}: ${rule} is off. Turn it on in ${CONFIG_FILE}, or add the folder to its global ignores if it holds the shared parts.`);
+    }
+  }
+  return { results, problems };
 }
 
 function describe(failure, results) {
@@ -159,7 +182,11 @@ export async function main(argv = process.argv.slice(2)) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  const results = await lint();
+  const { results, problems } = await lint();
+  if (problems.length) {
+    console.error(problems.join("\n"));
+    return 1;
+  }
   const current = countFindings(results);
 
   if (argv.includes("--prune")) {

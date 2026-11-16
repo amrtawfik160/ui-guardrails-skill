@@ -10,6 +10,7 @@ Claude Code:
 
 ```sh
 git clone https://github.com/amrtawfik160/ui-guardrails-skill.git
+mkdir -p ~/.claude/skills
 cp -r ui-guardrails-skill/skills/ui-guardrails ~/.claude/skills/
 ```
 
@@ -17,6 +18,7 @@ Codex:
 
 ```sh
 git clone https://github.com/amrtawfik160/ui-guardrails-skill.git
+mkdir -p ~/.agents/skills
 cp -r ui-guardrails-skill/skills/ui-guardrails ~/.agents/skills/
 ```
 

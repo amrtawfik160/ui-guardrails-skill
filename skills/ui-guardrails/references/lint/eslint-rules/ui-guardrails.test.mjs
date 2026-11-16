@@ -17,11 +17,15 @@ test("no-hand-built-status", () => {
       `const quiet = "bg-success/10 text-muted-foreground"`,
       `const mixed = "bg-warning/10 text-success-foreground"`,
       `const word = "text-success-foreground font-medium"`,
+      `cn("bg-success/10", "text-muted-foreground")`,
+      { code: `const c = "bg-success-soft/10 text-success"`, options: [{ tones: ["success", "success-soft"] }] },
     ],
     invalid: [
       { code: `<span className="rounded-full bg-success/10 text-success-foreground">Approved</span>`, errors: 1 },
       { code: `const tones = { failed: "bg-danger/15 border border-danger/30" }`, errors: 1 },
       { code: "const chip = `px-2 dark:bg-info/20 ${size} dark:text-info`", errors: 1 },
+      { code: `const c = clsx("rounded-full", "bg-success/10", active && "ring-1", "text-success")`, errors: 1 },
+      { code: `const c = cn("bg-success/10 text-success", "px-2")`, errors: 1 },
       {
         code: `const c = "bg-ok/10 text-ok"`,
         options: [{ tones: ["ok"], use: "Use <Chip tone>." }],

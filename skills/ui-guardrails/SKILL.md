@@ -33,7 +33,7 @@ Done when every hand-built kind from step 1 has a row and every path in the file
 
 Follow [references/lint/README.md](references/lint/README.md). Target the hand-built kind with the most copies, close the blind spots from step 1, and seed the baseline once, in the PR that adds the rule.
 
-Done when the tests pass, a probe with a new hand-built copy fails with a message naming the part, the same tree without the probe passes, and CI runs the check against the fetched base branch.
+Done when the tests pass, a probe with a new hand-built copy fails with a message naming the part, the same tree without the probe passes, the repo's ordinary lint still passes, and CI runs the check against the fetched base branch.
 
 ### 5. Write the project skill
 

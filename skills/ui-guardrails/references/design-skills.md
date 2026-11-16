@@ -18,7 +18,7 @@ A skill that triggers on any frontend task and sets a direction does the most da
 2. **A "When a design skill disagrees" table** in the project skill, one row per conflict from the diagnosis: what the general skill says, and the repo's answer with the file that holds it. Agents follow a named conflict far more reliably than a general "the repo wins".
 3. **Switch off "Off" skills for this repo** where the harness allows it:
    - Claude Code: `.claude/settings.json` → `{"permissions": {"deny": ["Skill(<name>)"]}}`.
-   - Codex: `.codex/config.toml` (or `~/.codex/config.toml`) → `[[skills.config]]` with `name = "<name>"` and `enabled = false`.
+   - Codex: no per-repo switch. `~/.codex/config.toml` → `[[skills.config]]` with `name = "<name>"` and `enabled = false` turns the skill off in every repo, so use it only when the person never wants that skill.
    - Other harnesses: rely on 1 and 2.
 4. **Vendored design skills in the repo.** If the repo vendors a skill that sets a direction, either remove it or keep it only for the "Keep for named jobs" uses, and say which in the project skill.
 

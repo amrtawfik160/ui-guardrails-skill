@@ -50,7 +50,7 @@ Do UI work in this order. Each step names the one place that answers it.
    icons come from the part `components.md` names. Never hand-build a status chip or banner,
    a local `*Badge`, or a second empty state. *(lint: no-hand-built-status)*
 4. **Parts own their look.** A page passes a shared part only layout (margin, width, grid or
-   flex placement). A new look is a new variant on the part.
+   flex placement). A look a part lacks is a new variant on the part, in the same PR.
 5. **Colour means something.** Semantic tokens only. Colour marks <a status, the primary
    action, ...> and nothing else.
 6. **Status reads one way.** <The status part> with one tone per meaning: <green done, blue

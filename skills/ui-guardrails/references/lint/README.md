@@ -1,6 +1,8 @@
 # Lint guard and ratchet
 
-A lint rule for the defect class the diagnosis ranked first, plus a baseline of today's findings that may only shrink. New code cannot add a finding. Old code is fixed over time, and each fix lowers the baseline in the same commit.
+A lint rule for the defect class the diagnosis ranked first, plus a baseline of today's findings that may only shrink. New code cannot raise a file's count. Old code is fixed over time, and each fix lowers the baseline in the same commit.
+
+The baseline counts findings per file, so a fix and a new copy in the same file cancel out. Review keeps that honest; the count still never grows.
 
 The files here mirror where they go in the target repo:
 
@@ -9,6 +11,8 @@ The files here mirror where they go in the target repo:
 | `eslint-rules/eslint-plugin-ui-guardrails.mjs` | `eslint-rules/` | The ESLint plugin with `no-hand-built-status` |
 | `eslint-rules/ui-guardrails.test.mjs` | `eslint-rules/` | Rule cases and ratchet cases (`node --test`) |
 | `scripts/check-ui-baseline.mjs` | `scripts/` | The ratchet: check, `--prune`, `--seed` |
+
+The rules run from their own config, `eslint.ui.config.mjs`, so the repo's ordinary `eslint` run never fails on grandfathered findings. Only the ratchet script reads that config.
 
 The baseline lands at `scripts/ui-baseline.json`. It lists the seeded rules and a count per file and rule:
 
@@ -34,16 +38,17 @@ The baseline lands at `scripts/ui-baseline.json`. It lists the seeded rules and 
 
 ## Wire it
 
-`eslint.config.mjs`. Lint everything agents edit, vendored folders included. Exclude only the shared parts folder, where the tints legitimately live. The repo's existing config supplies the parser for TypeScript and JSX:
+`eslint.ui.config.mjs` at the repo root. Lint everything agents edit, vendored folders included. Exclude only the shared parts folder, where the tints legitimately live, as a global ignore. Use the parser the repo's main config uses:
 
 ```js
+import tsParser from "@typescript-eslint/parser";
 import uiGuardrails from "./eslint-rules/eslint-plugin-ui-guardrails.mjs";
 
 export default [
-  // ...the repo's existing config
+  { ignores: ["src/components/ui/**"] },
   {
     files: ["src/**/*.{js,jsx,ts,tsx}"],
-    ignores: ["src/components/ui/**"],
+    languageOptions: { parser: tsParser, parserOptions: { ecmaFeatures: { jsx: true } } },
     plugins: { "ui-guardrails": uiGuardrails },
     rules: {
       "ui-guardrails/no-hand-built-status": ["error", { use: "Use <StatusBadge> or <Alert> (docs/design/components.md)." }],
@@ -52,7 +57,7 @@ export default [
 ];
 ```
 
-Set `BASELINE_FILE`, `LINT_TARGETS` and the plugin import path at the top of `check-ui-baseline.mjs` if the repo differs. Then `package.json`:
+Set `BASELINE_FILE`, `CONFIG_FILE`, `LINT_TARGETS` and the plugin import path at the top of `check-ui-baseline.mjs` if the repo differs. Then `package.json`:
 
 ```json
 { "scripts": { "lint:ui": "node scripts/check-ui-baseline.mjs" } }
@@ -60,7 +65,7 @@ Set `BASELINE_FILE`, `LINT_TARGETS` and the plugin import path at the top of `ch
 
 CI runs `lint:ui` on every PR with the base branch fetched (`fetch-depth: 0`, or `git fetch origin main`). `UI_BASELINE_BASE` overrides the base ref, default `origin/main`.
 
-The script lints through ESLint's Node API and counts only this plugin's rules. A repo on another linter swaps `lint()` for its JSON output and maps each diagnostic to a file and rule id.
+The script lints through ESLint's Node API and counts only this plugin's rules. A repo on another linter swaps `lint()` for its JSON output and maps each diagnostic to a file and rule id, keeping the two stops below.
 
 ## Land it
 
@@ -78,5 +83,9 @@ In the PR that adds the rule:
 | stale | A file has fewer findings than listed | `--prune`, commit the smaller baseline |
 | grown | The baseline lists more than the base branch did | Revert the baseline edit; fix the code |
 | unseeded | A plugin rule is missing from `rules` | `--seed`, once, in the PR that adds the rule |
+| is off | A linted file does not run every guardrail rule | Turn the rule on, or move the folder to the global ignores if it holds the shared parts |
+| does not parse | A file has a parsing error, so its findings are unknown | Fix the file or the parser setup |
+
+The last two stop `--prune` and `--seed` too, so switching a rule off or breaking the parser never looks like a fix.
 
 Seeding works only for a rule the base branch has not seeded, so after merge every rule gets the same may-only-shrink check. The base branch must be fetched; the script stops rather than skip the grown check.

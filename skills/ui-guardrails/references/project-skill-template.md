@@ -5,7 +5,7 @@ A thin skill inside the target repo that sets the order of UI work and points at
 ## Where it goes
 
 - `.agents/skills/<product>-ui/SKILL.md`. Codex and other agents read `.agents/skills/`.
-- A symlink for Claude Code: `ln -s ../../.agents/skills/<product>-ui .claude/skills/<product>-ui`.
+- A symlink for Claude Code: `mkdir -p .claude/skills && ln -s ../../.agents/skills/<product>-ui .claude/skills/<product>-ui`.
 - One line in `AGENTS.md` / `CLAUDE.md` for harnesses without skill discovery: "UI work: follow `.agents/skills/<product>-ui/SKILL.md`."
 
 If the repo has a frontend agent doc, put "Before you call it done" and "When a design skill disagrees" there instead and point at them, so each list has one home.
@@ -27,8 +27,8 @@ description: Use for any change to what a person sees in <surfaces and folders>,
 
 # <Product> UI
 
-<Product> already has a design system. A good result reuses it exactly; a new look is a
-design-system change in its own PR. Work in this order.
+<Product> already has a design system. A good result reuses it exactly. New colours, fonts
+or depth are a design-system change in their own PR. Work in this order.
 
 1. **Rules.** Read "The UI contract (read first)" at the top of `DESIGN.md`. Read a later
    section only for the part you touch.

@@ -5,6 +5,7 @@
 
 const DEFAULT_TONES = ["success", "warning", "danger", "destructive", "info"];
 const DEFAULT_USE = "Use the shared status part named in docs/design/components.md.";
+const CLASS_HELPERS = new Set(["cn", "clsx", "cx", "classNames", "twMerge", "cva", "tv"]);
 
 function escape(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -43,7 +44,8 @@ const noHandBuiltStatus = {
   },
   create(context) {
     const { tones = DEFAULT_TONES, use = DEFAULT_USE } = context.options[0] ?? {};
-    const tone = `(${tones.map(escape).join("|")})`;
+    // Longest first, so "success-soft" is not read as "success" plus a suffix.
+    const tone = `(${[...tones].sort((a, b) => b.length - a.length).map(escape).join("|")})`;
     // A tint is a status colour at reduced opacity: the background of a chip or banner.
     const TINT = new RegExp(`^bg-${tone}(?:-[a-z0-9]+)*/\\S+$`, "u");
     // Ink is the same tone's text or border.
@@ -68,12 +70,27 @@ const noHandBuiltStatus = {
       }
     }
 
+    const textOf = (node) =>
+      node.type === "Literal" && typeof node.value === "string"
+        ? node.value
+        : node.type === "TemplateLiteral"
+          ? node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join(" ")
+          : null;
+    const isHelperCall = (node) => node?.type === "CallExpression" && node.callee.type === "Identifier" && CLASS_HELPERS.has(node.callee.name);
+    // A string passed straight to cn()/clsx() is read together with its sibling arguments.
+    const isHelperArgument = (node) => isHelperCall(node.parent) && node.parent.arguments.includes(node);
+
     return {
       Literal(node) {
-        if (typeof node.value === "string") check(node, node.value);
+        if (typeof node.value === "string" && !isHelperArgument(node)) check(node, node.value);
       },
       TemplateLiteral(node) {
-        check(node, node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw).join(" "));
+        if (!isHelperArgument(node)) check(node, textOf(node));
+      },
+      CallExpression(node) {
+        if (!isHelperCall(node)) return;
+        const texts = node.arguments.map(textOf).filter((text) => text !== null);
+        if (texts.length) check(node, texts.join(" "));
       },
     };
   },
